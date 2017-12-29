@@ -37,6 +37,7 @@ def crawl(crawler):
     crawl_ainm_ie(crawler, out)
     crawl_blogspot(crawler, out, host='gaeltacht21.blogspot.com')
     crawl_blogspot(crawler, out, host='aonghus.blogspot.com')
+    crawl_meoneile(crawler, out)
 
 
 # RTE has news sites both for its own Irish language news programme
@@ -149,8 +150,6 @@ def crawl_irishtimes(crawler, out):
 
 
 def crawl_chg(crawler, out):
-    def _chg_content(page):
-        return page.split('<div class="container" id="article">')[1].split('<!-- /.right columns -->')[0]
     sitemap = 'https://www.chg.gov.ie/ga/help/sitemap/'
     res = crawler.fetch(sitemap)
     if res.status != 200:
@@ -166,7 +165,8 @@ def crawl_chg(crawler, out):
         if pres.status != 200:
             continue
         phtml = pres.content.decode('utf-8')
-        ptext = _chg_content(phtml)
+        ptext = extract('<div class="container" id="article">',
+                        '<!-- /.right columns -->', phtml)
         title = re.search(r'<title>(.+?)</title>', phtml)
         if title: title = striptags(title.group(1).split('|')[0]).strip()
         pubdate = pres.headers.get('Last-Modified')
@@ -176,6 +176,25 @@ def crawl_chg(crawler, out):
         for paragraph in re.findall(r'<p>(.+?)</p>', ptext):
             cleaned = cleantext(paragraph)
             out.write(cleaned + '\n')
+
+
+def crawl_meoneile(crawler, out):
+    sitemap = crawler.fetch_sitemap('https://www.meoneile.ie/sitemap.xml')
+    for url in sorted(sitemap.keys()):
+        fetchresult = crawler.fetch(url)
+        if fetchresult.status != 200:
+            continue
+        html = fetchresult.content.decode('utf-8')
+        pubdate = fetchresult.headers.get('Last-Modified')
+        if pubdate is None: pubdate = sitemap[url]
+        body = extract("<article class='article'>", '</article>', html)
+        paras = clean_paragraphs(title + '<br/>' + post)
+        if paras:
+            out.write('# Location: %s\n' % url)
+            out.write('# Genre: News\n')
+            if pubdate:
+                out.write('# Publication-Date: %s\n' % pubdate)
+            out.write('\n'.join(paras) + '\n')
 
 
 def crawl_blogspot(crawler, out, host):
@@ -203,7 +222,6 @@ def crawl_blogspot(crawler, out, host):
             if pubdate:
                 out.write('# Publication-Date: %s\n' % pubdate)
             out.write('\n'.join(paras) + '\n')
-        #post = html.split("<div class='post-body entry-content'>")[1].split("<div class='post-footer'>")[0]
 
 
 def crawl_ainm_ie(crawler, out):
